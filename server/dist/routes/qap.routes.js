@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const qap_controller_1 = require("../controllers/qap.controller");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const upload_middleware_1 = require("../middleware/upload.middleware");
+const router = (0, express_1.Router)();
+router.use(auth_middleware_1.authenticateToken);
+router.post('/upload', upload_middleware_1.upload.single('file'), qap_controller_1.uploadAndParseQAP);
+router.get('/:projectId', qap_controller_1.getQAPSerials);
+router.put('/:id', qap_controller_1.updateQAPSerial);
+exports.default = router;

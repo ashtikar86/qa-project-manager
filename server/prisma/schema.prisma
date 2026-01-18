@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id          Int      @id @default(autoincrement())
+  username    String   @unique
+  password    String // Hashed
+  name        String
+  designation String
+  role        String // SUPER_ADMIN, DDG, ADMIN, JCQAO, ENGINEER
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  projectsAsJCQAO   Project[] @relation("JCQAO")
+  projectsAsEngineer Project[] @relation("Engineer")
+}
+
+model Project {
+  id                    Int       @id @default(autoincrement())
+  projectName           String? // Derived or same as PO?
+  qaFieldUnit           String
+  opaName               String
+  projectClassification String
+  firmName              String
+  poNumber              String    @unique
+  poDate                DateTime
+  poReceiptDate         DateTime
+  poExpiryDate          DateTime
+  mainEquipment         String
+  orderValue            Float?
+  
+  // Dates & Status
+  fclDate               DateTime?
+  fcmDate               DateTime?
+  drawingApprovalDate   DateTime?
+  qapApprovalDate       DateTime?
+  dpExtensionDate       DateTime?
+  formIVIssuanceDate    DateTime?
+  
+  presentStatus         String?
+  remarks               String?
+  statusCategory        String    @default("Green") // Red, Orange, Green
+  progressPercentage    Float     @default(0.0)
+  isClosed              Boolean   @default(false)
+
+  // Relations
+  jcqaoId   Int?
+  jcqao     User? @relation("JCQAO", fields: [jcqaoId], references: [id])
+  engineerId Int?
+  engineer  User? @relation("Engineer", fields: [engineerId], references: [id])
+
+  lineItems       LineItem[]
+  documents       Document[]
+  inspectionCalls InspectionCall[]
+  qapSerials      QAPSerial[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LineItem {
+  id          Int     @id @default(autoincrement())
+  projectId   Int
+  project     Project @relation(fields: [projectId], references: [id])
+  description String
+  quantity    Int
+}
+
+model Document {
+  id           Int      @id @default(autoincrement())
+  projectId    Int
+  project      Project  @relation(fields: [projectId], references: [id])
+  type         String // PO, FCL, FCM, DRAWING, QAP, JIR, FORM_IV, OTHER
+  filename     String
+  originalName String
+  path         String
+  uploadedAt   DateTime @default(now())
+}
+
+model QAPSerial {
+  id          Int      @id @default(autoincrement())
+  projectId   Int
+  project     Project  @relation(fields: [projectId], references: [id])
+  serialNumber String
+  description String
+  isCompleted Boolean  @default(false)
+  remarks     String?
+  completedAt DateTime?
+}
+
+model InspectionCall {
+  id             Int      @id @default(autoincrement())
+  projectId      Int
+  project        Project  @relation(fields: [projectId], references: [id])
+  callNumber     String
+  callDate       DateTime
+  inspectionDate DateTime
+  location       String
+  status         String // Pending, Completed
+  
+  // Linked documents (Inspection Call PDF, JIR PDF) are stored in Document table or here?
+  // Let's keep general documents in Document table, but maybe link specific JIR here?
+  // For simplicity, we can just query Document by type and project, or add a relation.
+  jirDocumentPath String? 
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
