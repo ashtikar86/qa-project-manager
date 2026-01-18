@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -7,6 +6,9 @@ import Projects from './pages/Projects';
 import CreateProject from './pages/CreateProject';
 import ProjectDetails from './pages/ProjectDetails';
 import Users from './pages/Users';
+import Inspections from './pages/Inspections';
+import Settings from './pages/Settings';
+import Calendar from './pages/Calendar';
 
 function App() {
   const isAuthenticated = !!localStorage.getItem('token');
@@ -23,6 +25,9 @@ function App() {
           <Route path="/projects/create" element={<CreateProject />} />
           <Route path="/projects/:id" element={<ProjectDetails />} />
           <Route path="/users" element={<Users />} />
+          <Route path="/inspections" element={<Inspections />} />
+          <Route path="/calendar" element={<Calendar />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="/" element={<Navigate to="/dashboard" />} />
         </Route>
       </Routes>
