@@ -1,0 +1,27 @@
+services:
+  # Backend Service
+  server:
+    build: ./server
+    container_name: qa-manager-server
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./server/uploads:/app/uploads # Persist Uploads
+      - ./server/prisma:/app/prisma # Persist SQLite Database (dev.db)
+    environment:
+      - PORT=5000
+      - DATABASE_URL=file:./dev.db
+      - JWT_SECRET=your_super_secret_jwt_key_change_in_production
+    restart: always
+
+  # Frontend Service
+  client:
+    build: ./client
+    container_name: qa-manager-client
+    ports:
+      - "80:80" # Serve on standard HTTP port
+    depends_on:
+      - server
+    restart: always
+
+# Define Volumes (Optional for named volumes, but here we use bind mounts for simplicity as requested)
