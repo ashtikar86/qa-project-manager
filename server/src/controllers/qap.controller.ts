@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../prisma/client';
 import path from 'path';
 import fs from 'fs';
-import * as xlsx from 'xlsx';
+import { parseQAPExcel } from '../services/qap.service';
 
 export const uploadAndParseQAP = async (req: Request, res: Response) => {
     try {
@@ -22,13 +22,7 @@ export const uploadAndParseQAP = async (req: Request, res: Response) => {
         const finalPath = path.join(projectFolder, safeFilename);
         fs.renameSync(file.path, finalPath);
 
-        // 2. Parse File
-        const workbook = xlsx.readFile(finalPath);
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const data: any[] = xlsx.utils.sheet_to_json(sheet);
-
-        // 3. Save Document Record
+        // 2. Parse and Save Record
         await prisma.document.create({
             data: {
                 projectId: Number(projectId),
@@ -39,20 +33,9 @@ export const uploadAndParseQAP = async (req: Request, res: Response) => {
             },
         });
 
-        // 4. Create QAP Serials
-        const serialsToCreate = data.map((row) => ({
-            projectId: Number(projectId),
-            serialNumber: String(row['Serial No'] || row['Serial'] || row['Sl. No.'] || Object.values(row)[0] || ''),
-            description: String(row['Description'] || row['Activity'] || Object.values(row)[1] || ''),
-        })).filter(s => s.serialNumber && s.description);
+        const count = await parseQAPExcel(Number(projectId), finalPath);
 
-        // Use transaction as createMany might be tricky with SQLite/Prisma versions
-        const transactions = serialsToCreate.map(serial =>
-            prisma.qAPSerial.create({ data: serial })
-        );
-        await prisma.$transaction(transactions);
-
-        res.status(201).json({ message: 'QAP Uploaded and Parsed', count: serialsToCreate.length });
+        res.status(201).json({ message: 'QAP Uploaded and Parsed', count });
     } catch (error) {
         if (req.file && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
@@ -98,9 +81,45 @@ export const getQAPSerials = async (req: Request, res: Response) => {
         const { projectId } = req.params;
         const serials = await prisma.qAPSerial.findMany({
             where: { projectId: Number(projectId) },
+            orderBy: { id: 'asc' }
         });
         res.json(serials);
     } catch (error) {
         res.status(500).json({ message: 'Error fetching QAP Serials', error });
+    }
+};
+
+export const createQAPSerial = async (req: Request, res: Response) => {
+    try {
+        const { projectId, serialNumber, description } = req.body;
+
+        if (!projectId || !serialNumber || !description) {
+            return res.status(400).json({ message: 'Missing required fields' });
+        }
+
+        const serial = await prisma.qAPSerial.create({
+            data: {
+                projectId: Number(projectId),
+                serialNumber,
+                description,
+                isCompleted: false
+            }
+        });
+
+        res.status(201).json(serial);
+    } catch (error) {
+        res.status(500).json({ message: 'Error creating QAP Serial', error });
+    }
+};
+
+export const deleteQAPSerial = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        await prisma.qAPSerial.delete({
+            where: { id: Number(id) }
+        });
+        res.json({ message: 'QAP Serial deleted' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error deleting QAP Serial', error });
     }
 };

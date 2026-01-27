@@ -1,82 +1,84 @@
 import { Request, Response } from 'express';
-import { PDFDocument, rgb } from 'pdf-lib';
+import { generateProjectReport } from '../services/report.service';
 import prisma from '../prisma/client';
-import path from 'path';
-import fs from 'fs';
 
-export const generateProjectReport = async (req: Request, res: Response) => {
+export const createProjectReport = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const project = await prisma.project.findUnique({
-            where: { id: Number(id) },
-            include: {
-                documents: true,
-            },
+        const user = (req as any).user;
+        const report = await generateProjectReport(Number(id));
+
+        // Fetch project for naming in Knowledge Bank
+        const projectDetails = await prisma.project.findUnique({
+            where: { id: Number(id) }
         });
 
-        if (!project) return res.status(404).json({ message: 'Project not found' });
-
-        // Create a new PDFDocument
-        const pdfDoc = await PDFDocument.create();
-        const page = pdfDoc.addPage();
-        const { width, height } = page.getSize();
-        const fontSize = 24;
-
-        // Draw Cover Page
-        page.drawText(`Project Report: ${project.projectName || project.poNumber}`, {
-            x: 50,
-            y: height - 4 * fontSize,
-            size: fontSize,
-            color: rgb(0, 0, 0),
-        });
-
-        page.drawText(`Firm: ${project.firmName}`, { x: 50, y: height - 6 * fontSize, size: 18 });
-        page.drawText(`Status: ${project.statusCategory} (${project.progressPercentage}%)`, { x: 50, y: height - 8 * fontSize, size: 18 });
-        // Add more details...
-
-        // Append Documents
-        const projectFolder = path.join(__dirname, '../../uploads', project.id.toString());
-
-        for (const doc of project.documents) {
-            try {
-                const docPath = path.join(projectFolder, doc.filename);
-                if (!fs.existsSync(docPath)) continue;
-
-                const fileBytes = fs.readFileSync(docPath);
-
-                if (doc.filename.toLowerCase().endsWith('.pdf')) {
-                    const srcDoc = await PDFDocument.load(fileBytes);
-                    const copiedPages = await pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
-                    copiedPages.forEach((page) => pdfDoc.addPage(page));
-                } else if (doc.filename.match(/\.(jpg|jpeg|png)$/i)) {
-                    // Image embedding
-                    let image;
-                    if (doc.filename.match(/\.png$/i)) {
-                        image = await pdfDoc.embedPng(fileBytes);
-                    } else {
-                        image = await pdfDoc.embedJpg(fileBytes);
-                    }
-                    const imagePage = pdfDoc.addPage();
-                    // Scale image to fit page
-                    const imageDims = image.scale(0.5); // Naive scaling
-                    imagePage.drawImage(image, {
-                        x: 50,
-                        y: height - imageDims.height - 50,
-                        width: imageDims.width,
-                        height: imageDims.height,
-                    });
-                }
-            } catch (err) {
-                console.error(`Failed to embed document ${doc.filename}`, err);
+        // Optionally save report metadata in DB
+        await prisma.document.create({
+            data: {
+                projectId: Number(id),
+                type: 'PROJECT_REPORT',
+                filename: report.filename,
+                originalName: report.filename,
+                path: report.path.split('uploads')[1] ? `uploads${report.path.split('uploads')[1]}` : report.path,
             }
-        }
+        });
 
-        const pdfBytes = await pdfDoc.save();
+        // AUTO-ARCHIVE to Knowledge Bank
+        await prisma.knowledgeBankItem.create({
+            data: {
+                category: 'REPORTS',
+                title: 'Project Closure Report',
+                filename: report.filename,
+                originalName: `${projectDetails?.opaName || 'N/A'} - ${projectDetails?.poNumber || 'N/A'}`,
+                path: report.path.split('uploads')[1] ? `uploads${report.path.split('uploads')[1]}` : report.path,
+                uploadedBy: user.id
+            }
+        });
 
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=project-report-${project.poNumber}.pdf`);
-        res.send(Buffer.from(pdfBytes));
+        res.json({ message: 'Report generated successfully', ...report });
+
+        // ARCHIVE the project now and remove from engineer
+        await prisma.project.update({
+            where: { id: Number(id) },
+            data: {
+                isClosed: true,
+                isClosureRequested: false,
+                isClosureApproved: false,
+                engineerId: null // Removed from engineer active list
+            }
+        });
     } catch (error) {
         res.status(500).json({ message: 'Error generating report', error });
+    }
+};
+
+export const closeProject = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const project = await prisma.project.update({
+            where: { id: Number(id) },
+            data: { isClosureApproved: true }
+        });
+        res.json({ message: 'Project closure request approved. Engineer can now generate the final report.', project });
+    } catch (error) {
+        res.status(500).json({ message: 'Error approving project closure', error });
+    }
+};
+
+export const reopenProject = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const project = await prisma.project.update({
+            where: { id: Number(id) },
+            data: {
+                isClosed: false,
+                isClosureRequested: false,
+                isClosureApproved: false
+            }
+        });
+        res.json({ message: 'Project reopened', project });
+    } catch (error) {
+        res.status(500).json({ message: 'Error reopening project', error });
     }
 };

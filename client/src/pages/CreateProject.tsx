@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 
@@ -6,6 +6,7 @@ const CreateProject = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [users, setUsers] = useState<any[]>([]);
 
     // Initial State
     const [formData, setFormData] = useState({
@@ -18,7 +19,21 @@ const CreateProject = () => {
         poReceiptDate: '',
         poExpiryDate: '',
         mainEquipment: '',
+        jcqaoId: '',
+        engineerId: '',
     });
+
+    useEffect(() => {
+        const fetchUsers = async () => {
+            try {
+                const res = await api.get('/users');
+                setUsers(res.data);
+            } catch (err) {
+                console.error('Failed to fetch users', err);
+            }
+        };
+        fetchUsers();
+    }, []);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -30,7 +45,12 @@ const CreateProject = () => {
         setError('');
 
         try {
-            await api.post('/projects', formData);
+            const dataToSend = {
+                ...formData,
+                jcqaoId: formData.jcqaoId ? Number(formData.jcqaoId) : undefined,
+                engineerId: formData.engineerId ? Number(formData.engineerId) : undefined,
+            };
+            await api.post('/projects', dataToSend);
             navigate('/projects');
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to create project');
@@ -96,6 +116,27 @@ const CreateProject = () => {
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">PO Expiry Date</label>
                         <input type="date" name="poExpiryDate" required value={formData.poExpiryDate} onChange={handleChange} className="w-full border rounded-md p-2 focus:ring-2 focus:ring-blue-500 outline-none" />
+                    </div>
+                </div>
+
+                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1 font-bold">Assign JCQAO</label>
+                        <select name="jcqaoId" value={formData.jcqaoId} onChange={handleChange} className="w-full border rounded-md p-2 bg-blue-50/50">
+                            <option value="">Select JCQAO</option>
+                            {users.filter(u => u.role === 'JCQAO').map(u => (
+                                <option key={u.id} value={u.id}>{u.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1 font-bold">Assign Engineer</label>
+                        <select name="engineerId" value={formData.engineerId} onChange={handleChange} className="w-full border rounded-md p-2 bg-blue-50/50">
+                            <option value="">Select Engineer</option>
+                            {users.filter(u => u.role === 'ENGINEER').map(u => (
+                                <option key={u.id} value={u.id}>{u.name}</option>
+                            ))}
+                        </select>
                     </div>
                 </div>
 

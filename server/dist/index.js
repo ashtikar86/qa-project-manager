@@ -16,8 +16,8 @@ const PORT = process.env.PORT || 5000;
 app.use((0, cors_1.default)());
 app.use((0, helmet_1.default)());
 app.use((0, morgan_1.default)('dev'));
-app.use(express_1.default.json());
-app.use(express_1.default.urlencoded({ extended: true }));
+app.use(express_1.default.json({ limit: '100mb' }));
+app.use(express_1.default.urlencoded({ limit: '100mb', extended: true }));
 // Serve static files (uploads)
 app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, '../uploads')));
 const auth_routes_1 = __importDefault(require("./routes/auth.routes"));
@@ -29,6 +29,7 @@ const inspection_routes_1 = __importDefault(require("./routes/inspection.routes"
 const dashboard_routes_1 = __importDefault(require("./routes/dashboard.routes"));
 const backup_routes_1 = __importDefault(require("./routes/backup.routes"));
 const report_routes_1 = __importDefault(require("./routes/report.routes"));
+const knowledgebank_routes_1 = __importDefault(require("./routes/knowledgebank.routes"));
 const backup_job_1 = require("./jobs/backup.job");
 // Init Jobs
 (0, backup_job_1.initBackupJob)();
@@ -42,6 +43,7 @@ app.use('/api/inspections', inspection_routes_1.default);
 app.use('/api/dashboard', dashboard_routes_1.default);
 app.use('/api/backups', backup_routes_1.default);
 app.use('/api/reports', report_routes_1.default);
+app.use('/api/knowledge-bank', knowledgebank_routes_1.default);
 app.get('/', (req, res) => {
     res.json({ message: 'QA Project Management API is running' });
 });

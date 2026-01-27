@@ -1,9 +1,15 @@
 # Stage 1: Build React App
 FROM node:20-alpine AS builder
 WORKDIR /app
+
+# Install native dependencies required by esbuild/tailwind oxide
+RUN apk add --no-cache libc6-compat
+
 COPY package.json package-lock.json ./
-RUN npm install
+RUN npm ci
+
 COPY . .
+ENV NODE_ENV=production
 RUN npm run build
 
 # Stage 2: Serve with Nginx

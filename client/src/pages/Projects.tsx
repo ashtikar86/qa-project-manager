@@ -5,6 +5,7 @@ import api from '../api/axios';
 const Projects = () => {
     const [projects, setProjects] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<'ongoing' | 'archived'>('ongoing');
 
     useEffect(() => {
         fetchProjects();
@@ -30,18 +31,39 @@ const Projects = () => {
         }
     };
 
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const isAdmin = ['ADMIN', 'SUPER_ADMIN', 'DDG'].includes(user.role);
+
     if (loading) return <div className="p-8 text-center text-gray-500">Loading Projects...</div>;
 
     return (
         <div className="animate-fade-in">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-end mb-6">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-800">Projects</h1>
-                    <p className="text-gray-500 mt-1">Manage and track all ongoing quality assurance projects.</p>
+                    <p className="text-gray-500 mt-1">Manage and track all quality assurance projects.</p>
                 </div>
-                <Link to="/projects/create" className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow transition duration-200 flex items-center font-medium">
-                    <span className="mr-2">+</span> Create Project
-                </Link>
+                <div className="flex items-center gap-4">
+                    <div className="flex bg-gray-100 p-1 rounded-lg">
+                        <button
+                            onClick={() => setActiveTab('ongoing')}
+                            className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${activeTab === 'ongoing' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            Ongoing
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('archived')}
+                            className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${activeTab === 'archived' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            Archived
+                        </button>
+                    </div>
+                    {isAdmin && (
+                        <Link to="/projects/create" className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow transition duration-200 flex items-center font-medium">
+                            <span className="mr-2">+</span> Create Project
+                        </Link>
+                    )}
+                </div>
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -58,14 +80,14 @@ const Projects = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                        {projects.length === 0 ? (
+                        {projects.filter(p => activeTab === 'archived' ? p.isClosed : !p.isClosed).length === 0 ? (
                             <tr>
                                 <td colSpan={7} className="px-6 py-10 text-center text-gray-400">
-                                    No projects found. Create one to get started.
+                                    No {activeTab} projects found.
                                 </td>
                             </tr>
                         ) : (
-                            projects.map((project) => (
+                            projects.filter(p => activeTab === 'archived' ? p.isClosed : !p.isClosed).map((project) => (
                                 <tr key={project.id} className="hover:bg-gray-50 transition duration-150">
                                     <td className="px-6 py-4 font-medium text-gray-900">{project.poNumber}</td>
                                     <td className="px-6 py-4 text-gray-600">{project.firmName}</td>

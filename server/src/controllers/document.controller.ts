@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../prisma/client';
 import path from 'path';
 import fs from 'fs';
+import { parseQAPExcel } from '../services/qap.service';
 
 export const uploadDocument = async (req: Request, res: Response) => {
     try {
@@ -38,6 +39,21 @@ export const uploadDocument = async (req: Request, res: Response) => {
                 path: relativePath,
             },
         });
+
+        // Trigger QAP parsing if type is QAP
+        if (type === 'QAP') {
+            const ext = path.extname(file.originalname).toLowerCase();
+            const supportedExts = ['.xlsx', '.xls', '.xlsb', '.xlsm', '.pdf', '.docx', '.odt', '.txt', '.csv', '.ods', '.xps'];
+            if (supportedExts.includes(ext)) {
+                try {
+                    await parseQAPExcel(Number(projectId), finalPath);
+                } catch (err) {
+                    console.error('QAP parsing failed but document saved:', err);
+                }
+            } else {
+                console.log(`QAP upload has unsupported extension ${ext}, skipping auto-parsing.`);
+            }
+        }
 
         res.status(201).json(document);
     } catch (error) {

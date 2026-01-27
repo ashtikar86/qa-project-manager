@@ -14,6 +14,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getDashboardStats = void 0;
 const client_1 = __importDefault(require("../prisma/client"));
+const status_1 = require("../utils/status");
 const getDashboardStats = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const user = req.user;
@@ -26,44 +27,55 @@ const getDashboardStats = (req, res) => __awaiter(void 0, void 0, void 0, functi
         }
         const projects = yield client_1.default.project.findMany({
             where: whereClause,
-            select: {
-                id: true,
-                poExpiryDate: true,
-                dpExtensionDate: true,
-                progressPercentage: true,
-                statusCategory: true,
+            include: {
+                engineer: { select: { name: true } }
             }
         });
         let red = 0;
         let orange = 0;
         let green = 0;
+        const engineerLoad = {};
+        const opaStatusStats = {};
+        const engineerStatusStats = {};
         const progressDistribution = {
             lessThan5: 0,
             lessThan20: 0,
             moreThan60: 0,
             moreThan80: 0,
         };
-        const now = new Date();
-        const sixtyDays = 60 * 24 * 60 * 60 * 1000;
         projects.forEach((p) => {
-            // Status Logic
-            const expiry = p.dpExtensionDate ? new Date(p.dpExtensionDate) : new Date(p.poExpiryDate);
-            const diff = expiry.getTime() - now.getTime();
-            let status = 'Green';
-            if (diff < 0) {
-                status = 'Red';
-            }
-            else if (diff < sixtyDays) {
-                status = 'Orange';
-            }
+            const status = (0, status_1.calculateStatusCategory)(new Date(p.poExpiryDate), p.dpExtensionDate ? new Date(p.dpExtensionDate) : null);
             if (status === 'Red')
                 red++;
             else if (status === 'Orange')
                 orange++;
             else
                 green++;
+            // OPA Status Tracking
+            const opa = p.qaFieldUnit || 'Unknown';
+            if (!opaStatusStats[opa])
+                opaStatusStats[opa] = { red: 0, orange: 0, green: 0 };
+            if (status === 'Red')
+                opaStatusStats[opa].red++;
+            else if (status === 'Orange')
+                opaStatusStats[opa].orange++;
+            else
+                opaStatusStats[opa].green++;
+            // Engineer Status Tracking
+            if (p.engineer) {
+                const name = p.engineer.name;
+                engineerLoad[name] = (engineerLoad[name] || 0) + 1;
+                if (!engineerStatusStats[name])
+                    engineerStatusStats[name] = { red: 0, orange: 0, green: 0 };
+                if (status === 'Red')
+                    engineerStatusStats[name].red++;
+                else if (status === 'Orange')
+                    engineerStatusStats[name].orange++;
+                else
+                    engineerStatusStats[name].green++;
+            }
             // Progress Logic
-            const prog = p.progressPercentage;
+            const prog = p.progressPercentage || 0;
             if (prog < 5)
                 progressDistribution.lessThan5++;
             if (prog < 20)
@@ -76,6 +88,9 @@ const getDashboardStats = (req, res) => __awaiter(void 0, void 0, void 0, functi
         res.json({
             statusCounts: { red, orange, green },
             progressDistribution,
+            engineerLoad: Object.entries(engineerLoad).map(([name, count]) => ({ name, value: count })),
+            opaStatusStats: Object.entries(opaStatusStats).map(([name, stats]) => (Object.assign({ name }, stats))),
+            engineerStatusStats: Object.entries(engineerStatusStats).map(([name, stats]) => (Object.assign({ name }, stats))),
             totalActive: projects.length,
         });
     }

@@ -12,81 +12,85 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateProjectReport = void 0;
-const pdf_lib_1 = require("pdf-lib");
+exports.reopenProject = exports.closeProject = exports.createProjectReport = void 0;
+const report_service_1 = require("../services/report.service");
 const client_1 = __importDefault(require("../prisma/client"));
-const path_1 = __importDefault(require("path"));
-const fs_1 = __importDefault(require("fs"));
-const generateProjectReport = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+const createProjectReport = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { id } = req.params;
-        const project = yield client_1.default.project.findUnique({
+        const user = req.user;
+        const report = yield (0, report_service_1.generateProjectReport)(Number(id));
+        // Fetch project for naming in Knowledge Bank
+        const projectDetails = yield client_1.default.project.findUnique({
+            where: { id: Number(id) }
+        });
+        // Optionally save report metadata in DB
+        yield client_1.default.document.create({
+            data: {
+                projectId: Number(id),
+                type: 'PROJECT_REPORT',
+                filename: report.filename,
+                originalName: report.filename,
+                path: report.path.split('uploads')[1] ? `uploads${report.path.split('uploads')[1]}` : report.path,
+            }
+        });
+        // AUTO-ARCHIVE to Knowledge Bank
+        yield client_1.default.knowledgeBankItem.create({
+            data: {
+                category: 'REPORTS',
+                title: 'Project Closure Report',
+                filename: report.filename,
+                originalName: `${(projectDetails === null || projectDetails === void 0 ? void 0 : projectDetails.opaName) || 'N/A'} - ${(projectDetails === null || projectDetails === void 0 ? void 0 : projectDetails.poNumber) || 'N/A'}`,
+                path: report.path.split('uploads')[1] ? `uploads${report.path.split('uploads')[1]}` : report.path,
+                uploadedBy: user.id
+            }
+        });
+        res.json(Object.assign({ message: 'Report generated successfully' }, report));
+        // ARCHIVE the project now and remove from engineer
+        yield client_1.default.project.update({
             where: { id: Number(id) },
-            include: {
-                documents: true,
-            },
-        });
-        if (!project)
-            return res.status(404).json({ message: 'Project not found' });
-        // Create a new PDFDocument
-        const pdfDoc = yield pdf_lib_1.PDFDocument.create();
-        const page = pdfDoc.addPage();
-        const { width, height } = page.getSize();
-        const fontSize = 24;
-        // Draw Cover Page
-        page.drawText(`Project Report: ${project.projectName || project.poNumber}`, {
-            x: 50,
-            y: height - 4 * fontSize,
-            size: fontSize,
-            color: (0, pdf_lib_1.rgb)(0, 0, 0),
-        });
-        page.drawText(`Firm: ${project.firmName}`, { x: 50, y: height - 6 * fontSize, size: 18 });
-        page.drawText(`Status: ${project.statusCategory} (${project.progressPercentage}%)`, { x: 50, y: height - 8 * fontSize, size: 18 });
-        // Add more details...
-        // Append Documents
-        const projectFolder = path_1.default.join(__dirname, '../../uploads', project.id.toString());
-        for (const doc of project.documents) {
-            try {
-                const docPath = path_1.default.join(projectFolder, doc.filename);
-                if (!fs_1.default.existsSync(docPath))
-                    continue;
-                const fileBytes = fs_1.default.readFileSync(docPath);
-                if (doc.filename.toLowerCase().endsWith('.pdf')) {
-                    const srcDoc = yield pdf_lib_1.PDFDocument.load(fileBytes);
-                    const copiedPages = yield pdfDoc.copyPages(srcDoc, srcDoc.getPageIndices());
-                    copiedPages.forEach((page) => pdfDoc.addPage(page));
-                }
-                else if (doc.filename.match(/\.(jpg|jpeg|png)$/i)) {
-                    // Image embedding
-                    let image;
-                    if (doc.filename.match(/\.png$/i)) {
-                        image = yield pdfDoc.embedPng(fileBytes);
-                    }
-                    else {
-                        image = yield pdfDoc.embedJpg(fileBytes);
-                    }
-                    const imagePage = pdfDoc.addPage();
-                    // Scale image to fit page
-                    const imageDims = image.scale(0.5); // Naive scaling
-                    imagePage.drawImage(image, {
-                        x: 50,
-                        y: height - imageDims.height - 50,
-                        width: imageDims.width,
-                        height: imageDims.height,
-                    });
-                }
+            data: {
+                isClosed: true,
+                isClosureRequested: false,
+                isClosureApproved: false,
+                engineerId: null // Removed from engineer active list
             }
-            catch (err) {
-                console.error(`Failed to embed document ${doc.filename}`, err);
-            }
-        }
-        const pdfBytes = yield pdfDoc.save();
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=project-report-${project.poNumber}.pdf`);
-        res.send(Buffer.from(pdfBytes));
+        });
     }
     catch (error) {
         res.status(500).json({ message: 'Error generating report', error });
     }
 });
-exports.generateProjectReport = generateProjectReport;
+exports.createProjectReport = createProjectReport;
+const closeProject = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        const project = yield client_1.default.project.update({
+            where: { id: Number(id) },
+            data: { isClosureApproved: true }
+        });
+        res.json({ message: 'Project closure request approved. Engineer can now generate the final report.', project });
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Error approving project closure', error });
+    }
+});
+exports.closeProject = closeProject;
+const reopenProject = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        const project = yield client_1.default.project.update({
+            where: { id: Number(id) },
+            data: {
+                isClosed: false,
+                isClosureRequested: false,
+                isClosureApproved: false
+            }
+        });
+        res.json({ message: 'Project reopened', project });
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Error reopening project', error });
+    }
+});
+exports.reopenProject = reopenProject;

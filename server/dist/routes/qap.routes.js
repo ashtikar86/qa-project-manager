@@ -7,6 +7,8 @@ const upload_middleware_1 = require("../middleware/upload.middleware");
 const router = (0, express_1.Router)();
 router.use(auth_middleware_1.authenticateToken);
 router.post('/upload', upload_middleware_1.upload.single('file'), qap_controller_1.uploadAndParseQAP);
+router.post('/', qap_controller_1.createQAPSerial);
 router.get('/:projectId', qap_controller_1.getQAPSerials);
 router.put('/:id', qap_controller_1.updateQAPSerial);
+router.delete('/:id', qap_controller_1.deleteQAPSerial);
 exports.default = router;

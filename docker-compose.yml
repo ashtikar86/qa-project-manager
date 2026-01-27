@@ -7,11 +7,28 @@ services:
       - "5000:5000"
     volumes:
       - ./server/uploads:/app/uploads # Persist Uploads
-      - ./server/prisma:/app/prisma # Persist SQLite Database (dev.db)
     environment:
       - PORT=5000
-      - DATABASE_URL=file:./dev.db
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/qapm?schema=public
       - JWT_SECRET=your_super_secret_jwt_key_change_in_production
+    depends_on:
+      - db
+    command: >
+      sh -c "npx prisma db push && npx prisma db seed && npm start"
+    restart: always
+
+  # Database Service
+  db:
+    image: postgres:latest
+    container_name: qa-manager-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=qapm
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    ports:
+      - "5432:5432"
     restart: always
 
   # Frontend Service
@@ -24,4 +41,6 @@ services:
       - server
     restart: always
 
-# Define Volumes (Optional for named volumes, but here we use bind mounts for simplicity as requested)
+# Define Volumes
+volumes:
+  postgres_data:

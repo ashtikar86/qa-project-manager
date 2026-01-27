@@ -11,15 +11,17 @@ if (!fs.existsSync(backupDir)) {
 
 export const initBackupJob = () => {
     // Run weekly on Sunday at midnight (0 0 * * 0)
-    cron.schedule('0 0 * * 0', () => {
-        console.log('Running weekly backup...');
-        try {
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const backupFile = path.join(backupDir, `weekly-backup-${timestamp}.db`);
-            fs.copyFileSync(dbPath, backupFile);
-            console.log(`Weekly backup created: ${backupFile}`);
-        } catch (error) {
-            console.error('Weekly backup failed:', error);
-        }
-    });
+    // cron.schedule('0 0 * * 0', () => {
+    //     console.log('Running weekly backup...');
+    //     try {
+    //         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    //         const backupFile = path.join(backupDir, `weekly-backup-${timestamp}.db`);
+    //         fs.copyFileSync(dbPath, backupFile);
+    //         console.log(`Weekly backup created: ${backupFile}`);
+    //     } catch (error) {
+    //         console.error('Weekly backup failed:', error);
+    //     }
+    // });
+
+    console.log('PostgreSQL backup job not yet implemented');
 };

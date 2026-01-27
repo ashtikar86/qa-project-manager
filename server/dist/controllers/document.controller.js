@@ -16,6 +16,7 @@ exports.getProjectDocuments = exports.uploadDocument = void 0;
 const client_1 = __importDefault(require("../prisma/client"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
+const qap_service_1 = require("../services/qap.service");
 const uploadDocument = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { projectId, type } = req.body;
@@ -44,6 +45,22 @@ const uploadDocument = (req, res) => __awaiter(void 0, void 0, void 0, function*
                 path: relativePath,
             },
         });
+        // Trigger QAP parsing if type is QAP
+        if (type === 'QAP') {
+            const ext = path_1.default.extname(file.originalname).toLowerCase();
+            const supportedExts = ['.xlsx', '.xls', '.xlsb', '.xlsm', '.pdf', '.docx', '.odt', '.txt', '.csv', '.ods', '.xps'];
+            if (supportedExts.includes(ext)) {
+                try {
+                    yield (0, qap_service_1.parseQAPExcel)(Number(projectId), finalPath);
+                }
+                catch (err) {
+                    console.error('QAP parsing failed but document saved:', err);
+                }
+            }
+            else {
+                console.log(`QAP upload has unsupported extension ${ext}, skipping auto-parsing.`);
+            }
+        }
         res.status(201).json(document);
     }
     catch (error) {
